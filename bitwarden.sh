@@ -12,6 +12,20 @@ bw-switch() {
 
 bw-search() {
 	# processing CLI arguments
+	if [[ ${#@} == 0 ]]; then
+		usage="
+Usage: bw-search [options] <search_term>
+
+Options:
+	--notes, -n		print out notes/fields 
+	--show, -S		print out sensitive information (default only copies to xclip)
+	--interactive, -i	open interactive mode
+	--session, 		load a session key (bypass login)
+"
+		echo "$usage"
+		exit
+	fi
+
 	for arg in "$@"; do
 		if [[ $next_arg_type == "session" ]]; then
 			session=$arg
