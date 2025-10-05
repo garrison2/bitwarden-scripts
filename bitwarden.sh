@@ -146,19 +146,20 @@ Options:
 				  		then "", "\tNotes: \(.notes | gsub("\n";"\n\t       "))"
 						else empty
 					  end)'
+			note_val="$(jq -r ".[$i] | ${note_str}" <<< $output)"
 		fi
 		
 		jq -r ".[$i].name | ." <<< $output
 		if [[ $type == login ]]; then
 			jq -r ".[$i] | \"\tUsername: \(.login.username)\n\" + 
 						   \"\tPassword: ${sensitive_str}\"" <<< $output
-			jq -r ".[$i] | ${note_str}" <<< $output
+			if [[ -n $note_val ]]; then echo -e "$note_val"; fi
 		elif [[ $type == card ]]; then
 			jq -r ".[$i].card | keys_unsorted[] as \$k | 
 				if \"\(\$k)\" == \"number\" 
 				then \"\tnumber: $sensitive_str\"
 				else \"\t\(\$k): \(.[\$k])\" end" <<< $output
-			jq -r ".[$i] | ${note_str}" <<< $output
+			if [[ -n $note_val ]]; then echo -e "$note_val"; fi
 		else
 			echo "Unknown type (login, card, etc.)"
 		fi
