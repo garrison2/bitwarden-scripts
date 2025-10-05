@@ -118,13 +118,22 @@ bw-search() {
 		fi
 
 		# deal with printing notes/fields
-		if [[ -n $print_note ]]; then 
-			note_str='"", "\(.fields | .[] |
-					"\t\(.name): \(.value | gsub("\n";"; "))")", "",
-					  "\t\(if .notes != null then "Notes: \(.notes | gsub("\n";"; "))" end)"'
+		if [[ -n $print_note ]]; then
+			note_str='(if (.fields != null and .fields != [])
+					    then "", (.fields[] | 
+							if .value == null then
+								"\t\(.name): (null)"
+							else
+								"\t\(.name): \(.value | gsub("\n";"; "))"
+							end)
+						else empty
+					   end),
+					  (if .notes != null
+				  		then "", "\tNotes: \(.notes | gsub("\n";"\n\t       "))"
+						else empty
+					  end)'
 		fi
 		
-		jq ".[$i]" <<< $output
 		jq -r ".[$i].name | ." <<< $output
 		if [[ $type == login ]]; then
 			jq -r ".[$i] | \"\tUsername: \(.login.username)\n\" + 
@@ -141,35 +150,45 @@ bw-search() {
 		fi
 
 	done
-	echo "here, exited"
 
-
-#	if [[ $(jq length <<< $output) > 1 ]]; then
-#		filter=".[] | select(.name != null) | \"\\(.name)\\n\\tUsername: \\(.login.username)\\n\\tPassword: ${print_sensitive}${print_note}\""
-#		jq -r "$filter" <<< $output
-#	else
-#		if [[ "$print_sensitive" == "[hidden]" ]]; then
-#			print_sensitive="[copied to clipboard]"
-#		fi
-#		filter=".[0] | \"\\(.name)\\n\\tUsername: \\(.login.username)\\n\\tPassword: ${print_sensitive}${print_note}\""
-#		jq -r "$filter" <<< $output
-#		password=$(jq .[0].login.password <<< $output)
-#		echo -n "${password:1:-1}" | xclip -selection clipboard
-#	fi
-#
 	if [[ -n $interactive ]]; then
+		help="Commands: list, print <[index:0], item>, help, exit/quit"
+
+		echo -e "\nInteractive Mode:"
+		echo $help
+
 		while true; do
 			echo -n ">> "
-			read input
-
-			if [[ $input == "exit" || $input == "quit" ]]; then
-				exit
-			fi
+			read -a input
+			case "${input[0]}" in
+				"list")
+					jq -r '.[] | 
+						"\(.name)",
+						"\(keys_unsorted[] as $k | "\t\($k): [hidden]")"' <<< $output
+					;;
+				"print")
+					num_inputs=${#input[@]}
+					if [[ $num_inputs < 2 || $num_inputs > 3 ]]; then
+						echo "Invalid number of inputs."
+					elif [[ $num_inputs < 3 ]]; then
+						jq -r ".[0].${input[1]}" <<< $output
+					else
+						jq -r ".[${input[1]}].${input[2]}" <<< $output
+					fi
+					;;
+				"exit" | "quit")
+					exit
+					;;
+				"help")
+					echo -e "$help"
+					;;
+				*)
+					echo "Invalid input."
+					echo -e "$help"
+				;;
+			esac
 		done
 	fi
-
-
-
 }
 
 cmd=$(basename "$0")
