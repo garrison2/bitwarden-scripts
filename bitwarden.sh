@@ -11,17 +11,19 @@ bw-switch() {
 }
 
 bw-search() {
-	# processing CLI arguments
-	if [[ ${#@} == 0 ]]; then
-		usage="
-Usage: bw-search [options] <search_term>
+	usage=" \
+Usage: bw-search [options] <search term>
 
 Options:
+	--help, -h		show help options
 	--notes, -n		print out notes/fields 
 	--show, -S		print out sensitive information (default only copies to xclip)
 	--interactive, -i	open interactive mode
-	--session, 		load a session key (bypass login)
+	--session		load a session key (bypass login)
 "
+
+	# processing CLI arguments
+	if [[ ${#@} == 0 ]]; then
 		echo "$usage"
 		exit
 	fi
@@ -34,6 +36,10 @@ Options:
 		fi
 
 		case $arg in
+			"--help" | "-h")
+				echo "$usage"
+				exit
+				;;
 			"--notes" | "-n")
 				print_note="true"
 				;;
@@ -62,6 +68,8 @@ Options:
 								;;
 							*)
 								echo "Unknown option: \"$char\""
+								exit
+								;;
 						esac;
 					done
 				elif [[ -n $search_term ]]; then
