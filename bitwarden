@@ -1,4 +1,5 @@
 #!/bin/bash
+export NODE_OPTIONS="$NODE_OPTIONS --no-deprecation"
 
 bw-switch() {
     VAULT_PATH="$HOME/.config/Bitwarden CLI"
@@ -11,7 +12,7 @@ bw-switch() {
 }
 
 bw-search() {
-    usage=" \
+    usage="\
 Usage: bw-search [options] <search term>
 
 Options:
@@ -22,6 +23,7 @@ Options:
     --session <key>     load a session key (bypass login)
     --export, -E        export the session key to the shell (and do not logout)
     --no-load           do not check/load session key from the shell
+    --notify-send, -N   use notify-send to send a notification with the output
 "
 
     # processing CLI arguments
@@ -62,6 +64,9 @@ Options:
             "--no-load")
                 autoload_session="false"
                 ;;
+            "--notify-send")
+                notify_send="true"
+                ;;
             *)
                 if [[ ${arg:0:1} == "-" ]]; then
                     for (( i=1; i<${#arg}; i++ )); do
@@ -78,6 +83,9 @@ Options:
                                 ;;
                             "E")
                                 export_session="true"
+                                ;;
+                            "N")
+                                notify_send="true"
                                 ;;
                             *)
                                 echo "Unknown option: \"$char\""
@@ -125,18 +133,20 @@ Options:
         export BW_SESSION=$session
     fi
 
+
     # getting output
     output=$(bw list items --session $session --search "$search_term" --pretty)
     if [[ $output == "[]" ]]; then
         echo "No results found."
+        [[ $notify_send == true ]] && notify-send "Bitwarden" "No results found."
         exit
     fi
 
     # processing value substitution flags
-    if [[ -n $print_note ]]; then print_note="\n\tNotes: \\(.notes)"; fi
+    print_note=${print_note:+"\n\tNotes: \\(.notes)"}
 
     # Parsing JSON output & printing
-    for (( i=0; i<$(jq length <<< $output); i++)); do
+    for (( i=0; i < $(jq length <<< "$output"); i++)); do
         if [[ $(jq ".[$i] | has(\"login\")" <<< $output) == "true" ]]; then
             type=login
         elif [[ $(jq ".[$i] | has(\"card\")" <<< $output) == "true" ]]; then
@@ -178,23 +188,29 @@ Options:
                       end)'
             note_val="$(jq -r ".[$i] | ${note_str}" <<< $output)"
         fi
-        
-        jq -r ".[$i].name | ." <<< $output
+
+        message="$(jq -r ".[$i].name | ." <<< $output)"
         if [[ $type == login ]]; then
-            jq -r ".[$i] | \"\tUsername: \(.login.username)\n\" + 
+            message="$message\n$(
+                jq -r ".[$i] | \"\tUsername: \(.login.username)\n\" + 
                            \"\tPassword: ${sensitive_str}\"" <<< $output
-            if [[ -n $note_val ]]; then echo -e "$note_val"; fi
+                )"
+            if [[ -n $note_val ]]; then message="$message\n$note_val"; fi
         elif [[ $type == card ]]; then
-            jq -r ".[$i].card | keys_unsorted[] as \$k | 
-                if \"\(\$k)\" == \"number\" 
-                then \"\tnumber: $sensitive_str\"
-                else \"\t\(\$k): \(.[\$k])\" end" <<< $output
-            if [[ -n $note_val ]]; then echo -e "$note_val"; fi
+            message="$message\n$(
+                jq -r ".[$i].card | keys_unsorted[] as \$k | 
+                    if \"\(\$k)\" == \"number\" 
+                    then \"\tnumber: $sensitive_str\"
+                    else \"\t\(\$k): \(.[\$k])\" end" <<< $output
+                )"
+            if [[ -n $note_val ]]; then message="$message\n$note_val"; fi
         else
-            echo "Unknown type (login, card, etc.)"
+            message="$message\nUnknown type (login, card, etc.)"
         fi
 
     done
+    echo -e "$message"
+    [[ $notify_send == true ]] && notify-send "Bitwarden" "$message"
 
     if [[ -n $interactive ]]; then
         help="Commands: list, print <[index:0], item>, help, exit/quit"
